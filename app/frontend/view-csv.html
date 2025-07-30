@@ -1,0 +1,30 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>CSV 보기</title>
+</head>
+<body>
+  <a href="index.html">← 목록으로</a>
+  <h1>CSV 테이블</h1>
+  <table id="csvTable" border="1"></table>
+  
+  <script>
+    fetch('http://localhost:3001/api/csv')
+      .then(res => res.json())
+      .then(rows => {
+        const table = document.getElementById('csvTable');
+        rows.forEach((cols, i) => {
+          const tr = document.createElement('tr');
+          cols.forEach(col => {
+            const cell = document.createElement(i === 0 ? 'th' : 'td');
+            cell.textContent = col;
+            tr.appendChild(cell);
+          });
+          table.appendChild(tr);
+        });
+      });
+  </script>
+</body>
+</html>
