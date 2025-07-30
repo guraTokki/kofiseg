@@ -1,15 +1,224 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>파일 목록</title>
+  <title>파일 관리 시스템</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      display: flex;
+      gap: 30px;
+    }
+    .section {
+      flex: 1;
+      border: 1px solid #ddd;
+      padding: 20px;
+      border-radius: 8px;
+    }
+    .upload-area {
+      border: 2px dashed #ccc;
+      padding: 30px;
+      text-align: center;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      background-color: #fafafa;
+    }
+    .upload-area.dragover {
+      border-color: #007bff;
+      background-color: #e7f3ff;
+    }
+    input[type="file"] {
+      margin: 10px 0;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin: 8px 0;
+      padding: 8px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .file-link {
+      text-decoration: none;
+      color: #007bff;
+      margin-right: 10px;
+    }
+    .file-link:hover {
+      text-decoration: underline;
+    }
+    .download-link {
+      font-size: 12px;
+      color: #666;
+      text-decoration: none;
+    }
+    .download-link:hover {
+      text-decoration: underline;
+    }
+    h2 {
+      color: #333;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 10px;
+    }
+    .nav-links {
+      margin-bottom: 20px;
+    }
+    .nav-links a {
+      color: #007bff;
+      text-decoration: none;
+      margin-right: 15px;
+    }
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
-  <h1>파일 목록</h1>
-  <a href="view-csv.html">CSV 보기</a>
-  <ul id="fileList"></ul>
-  <script src="script.js"></script>
+  <h1>파일 관리 시스템</h1>
+  
+  <div class="nav-links">
+    <a href="view-csv.html">CSV 보기 (샘플)</a>
+    <a href="view-file.html">파일 뷰어</a>
+  </div>
+
+  <div class="container">
+    <div class="section">
+      <h2>파일 업로드</h2>
+      <div class="upload-area" id="uploadArea">
+        <p>파일을 여기에 드래그하거나 아래 버튼을 클릭하세요</p>
+        <input type="file" id="fileInput" multiple>
+        <br>
+        <button onclick="uploadFiles()">업로드</button>
+      </div>
+      
+      <h3>업로드된 파일</h3>
+      <ul id="uploadedFileList"></ul>
+    </div>
+
+    <div class="section">
+      <h2>기본 파일</h2>
+      <ul id="fileList"></ul>
+    </div>
+  </div>
+
+  <script>
+    // 드래그 앤 드롭 기능
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      const files = e.dataTransfer.files;
+      fileInput.files = files;
+    });
+
+    // 파일 업로드 함수
+    async function uploadFiles() {
+      const files = fileInput.files;
+      if (!files.length) {
+        alert('파일을 선택해주세요.');
+        return;
+      }
+
+      for (let file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+          const response = await fetch('http://localhost:3001/api/uploads', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (response.ok) {
+            console.log(`${file.name} 업로드 성공`);
+          } else {
+            console.error(`${file.name} 업로드 실패`);
+          }
+        } catch (error) {
+          console.error('업로드 에러:', error);
+        }
+      }
+
+      // 업로드 완료 후 목록 새로고침
+      loadUploadedFiles();
+      fileInput.value = '';
+    }
+
+    // 업로드된 파일 목록 로드
+    function loadUploadedFiles() {
+      fetch('http://localhost:3001/api/uploads')
+        .then(res => res.json())
+        .then(files => {
+          const list = document.getElementById('uploadedFileList');
+          list.innerHTML = '';
+          files.forEach(file => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <a href="view-file.html?file=${encodeURIComponent(file)}&source=uploads" class="file-link">${file}</a>
+              <a href="http://localhost:3001/api/download?file=${encodeURIComponent(file)}&source=uploads" class="download-link">[다운로드]</a>
+            `;
+            list.appendChild(li);
+          });
+        })
+        .catch(err => console.error('업로드 파일 목록 로드 실패:', err));
+    }
+
+    // 기본 파일 목록 로드
+    function loadDefaultFiles() {
+      fetch('http://localhost:3001/api/files')
+        .then(res => res.json())
+        .then(files => {
+          const list = document.getElementById('fileList');
+          list.innerHTML = '';
+          files.forEach(file => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+              <a href="view-file.html?file=${encodeURIComponent(file)}&source=files" class="file-link">${file}</a>
+              <a href="http://localhost:3001/api/download?file=${encodeURIComponent(file)}&source=files" class="download-link">[다운로드]</a>
+            `;
+            list.appendChild(li);
+          });
+        })
+        .catch(err => console.error('기본 파일 목록 로드 실패:', err));
+    }
+
+    // 페이지 로드 시 파일 목록 로드
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUploadedFiles();
+      loadDefaultFiles();
+    });
+  </script>
 </body>
 </html>
-

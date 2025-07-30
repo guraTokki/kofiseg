@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>파일 뷰어</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .nav-links {
+      margin-bottom: 20px;
+    }
+    .nav-links a {
+      color: #007bff;
+      text-decoration: none;
+      margin-right: 15px;
+    }
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+    .file-info {
+      background-color: #f8f9fa;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border-left: 4px solid #007bff;
+    }
+    .content-area {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border: 1px solid #ddd;
+    }
+    th {
+      background-color: #f8f9fa;
+      font-weight: bold;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    .text-content {
+      padding: 20px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      background-color: #f8f9fa;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .error {
+      color: #dc3545;
+      text-align: center;
+      padding: 40px;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="nav-links">
+    <a href="index.html">← 목록으로</a>
+    <a href="view-csv.html">CSV 보기 (샘플)</a>
+  </div>
+
+  <h1>파일 뷰어</h1>
+  
+  <div class="file-info" id="fileInfo">
+    <strong>파일명:</strong> <span id="fileName">로딩 중...</span><br>
+    <strong>소스:</strong> <span id="fileSource">-</span>
+  </div>
+
+  <div class="content-area">
+    <div id="content" class="loading">파일을 로딩 중입니다...</div>
+  </div>
+
+  <script>
+    // URL 파라미터에서 파일 정보 추출
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileName = urlParams.get('file');
+    const source = urlParams.get('source') || 'files';
+
+    if (!fileName) {
+      document.getElementById('content').innerHTML = '<div class="error">파일명이 지정되지 않았습니다.</div>';
+    } else {
+      // 파일 정보 표시
+      document.getElementById('fileName').textContent = fileName;
+      document.getElementById('fileSource').textContent = source === 'uploads' ? '업로드된 파일' : '기본 파일';
+
+      // 파일 내용 로드
+      loadFileContent(fileName, source);
+    }
+
+    async function loadFileContent(fileName, source) {
+      try {
+        const response = await fetch(`http://localhost:3001/api/view-file?file=${encodeURIComponent(fileName)}&source=${source}`);
+        
+        if (!response.ok) {
+          throw new Error('파일을 불러올 수 없습니다.');
+        }
+
+        const result = await response.json();
+        displayContent(result);
+
+      } catch (error) {
+        console.error('파일 로드 에러:', error);
+        document.getElementById('content').innerHTML = `<div class="error">파일을 불러오는 중 오류가 발생했습니다: ${error.message}</div>`;
+      }
+    }
+
+    function displayContent(result) {
+      const contentDiv = document.getElementById('content');
+
+      if (result.type === 'csv') {
+        // CSV 파일을 테이블로 표시
+        const table = document.createElement('table');
+        result.data.forEach((row, index) => {
+          const tr = document.createElement('tr');
+          row.forEach(cell => {
+            const element = document.createElement(index === 0 ? 'th' : 'td');
+            element.textContent = cell;
+            tr.appendChild(element);
+          });
+          table.appendChild(tr);
+        });
+        contentDiv.innerHTML = '';
+        contentDiv.appendChild(table);
+
+      } else if (result.type === 'text') {
+        // 텍스트 파일을 그대로 표시
+        contentDiv.innerHTML = `<div class="text-content">${escapeHtml(result.data)}</div>`;
+
+      } else {
+        contentDiv.innerHTML = '<div class="error">지원하지 않는 파일 형식입니다.</div>';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
