@@ -30,12 +30,14 @@ const server = http.createServer((req, res) => {
     }
 
     if (pathname === '/api/files') {
+        console.log(FILES_DIR)
         fs.readdir(FILES_DIR, (err, files) => {
             if (err) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ error: '파일 목록 오류' }));
             }
             res.writeHead(200, { 'Content-Type': 'application/json' });
+            console.log(FILES_DIR, JSON.stringify(files))
             res.end(JSON.stringify(files));
         });
 

@@ -92,10 +92,57 @@
     .nav-links a:hover {
       text-decoration: underline;
     }
+    .auto-refresh-controls {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: white;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      z-index: 1000;
+    }
+    .refresh-status {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+    .refresh-indicator {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-left: 5px;
+    }
+    .refresh-indicator.active {
+      background-color: #28a745;
+      animation: pulse 1s infinite;
+    }
+    .refresh-indicator.paused {
+      background-color: #dc3545;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
   <h1>파일 관리 시스템</h1>
+  
+  <!-- 자동 새로고침 컨트롤 -->
+  <div class="auto-refresh-controls">
+    <label>
+      <input type="checkbox" id="autoRefreshToggle" checked> 
+      자동 새로고침 (5초)
+    </label>
+    <div class="refresh-status">
+      다음 새로고침: <span id="countdown">5</span>초
+      <span class="refresh-indicator active" id="refreshIndicator"></span>
+    </div>
+  </div>
   
   <div class="nav-links">
     <a href="view-csv.html">CSV 보기 (샘플)</a>
@@ -123,6 +170,12 @@
   </div>
 
   <script>
+    // 자동 새로고침 관련 변수
+    let autoRefreshEnabled = true;
+    let refreshInterval = null;
+    let countdownInterval = null;
+    let countdownSeconds = 5;
+
     // 드래그 앤 드롭 기능
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
@@ -151,29 +204,54 @@
         return;
       }
 
+      const uploadButton = document.querySelector('button');
+      uploadButton.disabled = true;
+      uploadButton.textContent = '업로드 중...';
+
+      let successCount = 0;
+      let failCount = 0;
+
       for (let file of files) {
         const formData = new FormData();
         formData.append('file', file);
 
         try {
-          const response = await fetch('http://localhost:3001/api/uploads', {
+          console.log(`Uploading ${file.name}...`);
+          
+          const response = await fetch('/http://localhost:3001/api/uploads', {
             method: 'POST',
             body: formData
           });
 
-          if (response.ok) {
+          const result = await response.json();
+          
+          if (response.ok && result.success) {
             console.log(`${file.name} 업로드 성공`);
+            successCount++;
           } else {
-            console.error(`${file.name} 업로드 실패`);
+            console.error(`${file.name} 업로드 실패:`, result.error || 'Unknown error');
+            failCount++;
           }
         } catch (error) {
-          console.error('업로드 에러:', error);
+          console.error(`${file.name} 업로드 에러:`, error);
+          failCount++;
         }
       }
 
-      // 업로드 완료 후 목록 새로고침
+      // 결과 메시지 표시
+      if (successCount > 0) {
+        alert(`${successCount}개 파일 업로드 완료${failCount > 0 ? `, ${failCount}개 파일 실패` : ''}`);
+      } else {
+        alert('모든 파일 업로드가 실패했습니다.');
+      }
+
+      // 업로드 완료 후 즉시 목록 새로고침
       loadUploadedFiles();
+      loadDefaultFiles();
       fileInput.value = '';
+      
+      uploadButton.disabled = false;
+      uploadButton.textContent = '업로드';
     }
 
     // 업로드된 파일 목록 로드
@@ -197,6 +275,7 @@
 
     // 기본 파일 목록 로드
     function loadDefaultFiles() {
+      //fetch('/api/files')
       fetch('http://localhost:3001/api/files')
         .then(res => res.json())
         .then(files => {
@@ -214,10 +293,96 @@
         .catch(err => console.error('기본 파일 목록 로드 실패:', err));
     }
 
-    // 페이지 로드 시 파일 목록 로드
+    // 자동 새로고침 시작
+    function startAutoRefresh() {
+      if (refreshInterval) return; // 이미 실행 중이면 무시
+      
+      refreshInterval = setInterval(() => {
+        if (autoRefreshEnabled) {
+          console.log('자동 새로고침 실행 중...');
+          loadUploadedFiles();
+          loadDefaultFiles();
+        }
+      }, 5000);
+
+      startCountdown();
+    }
+
+    // 자동 새로고침 중지
+    function stopAutoRefresh() {
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+    }
+
+    // 카운트다운 시작
+    function startCountdown() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      countdownSeconds = 5;
+      updateCountdownDisplay();
+
+      countdownInterval = setInterval(() => {
+        countdownSeconds--;
+        updateCountdownDisplay();
+
+        if (countdownSeconds <= 0) {
+          countdownSeconds = 5; // 리셋
+        }
+      }, 1000);
+    }
+
+    // 카운트다운 표시 업데이트
+    function updateCountdownDisplay() {
+      const countdownElement = document.getElementById('countdown');
+      const indicatorElement = document.getElementById('refreshIndicator');
+      
+      if (autoRefreshEnabled) {
+        countdownElement.textContent = countdownSeconds;
+        indicatorElement.className = 'refresh-indicator active';
+      } else {
+        countdownElement.textContent = '일시정지';
+        indicatorElement.className = 'refresh-indicator paused';
+      }
+    }
+
+    // 자동 새로고침 토글 이벤트
+    document.getElementById('autoRefreshToggle').addEventListener('change', function(e) {
+      autoRefreshEnabled = e.target.checked;
+      
+      if (autoRefreshEnabled) {
+        console.log('자동 새로고침 활성화');
+        startAutoRefresh();
+      } else {
+        console.log('자동 새로고침 비활성화');
+        stopAutoRefresh();
+      }
+      
+      updateCountdownDisplay();
+    });
+
+    // 페이지 로드 시 실행
     document.addEventListener('DOMContentLoaded', () => {
+      console.log('페이지 로드됨 - 파일 목록 로딩 및 자동 새로고침 시작');
       loadUploadedFiles();
       loadDefaultFiles();
+      
+      // 자동 새로고침 시작
+      if (autoRefreshEnabled) {
+        startAutoRefresh();
+      }
+    });
+
+    // 페이지를 떠날 때 타이머 정리
+    window.addEventListener('beforeunload', () => {
+      stopAutoRefresh();
     });
   </script>
 </body>
