@@ -29,28 +29,65 @@ const server = http.createServer((req, res) => {
         return res.end();
     }
 
-    if (pathname === '/api/files') {
-        console.log(FILES_DIR)
-        fs.readdir(FILES_DIR, (err, files) => {
+    if (pathname.startsWith('/api/files')) {
+        const query = querystring.parse(parsedUrl.query);
+        const subPath = query.path || '';
+        const targetDir = path.join(FILES_DIR, subPath);
+        
+        // 디렉토리 탐색 보안 검사
+        if (!targetDir.startsWith(FILES_DIR)) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: '잘못된 경로입니다' }));
+        }
+
+        fs.readdir(targetDir, { withFileTypes: true }, (err, entries) => {
             if (err) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ error: '파일 목록 오류' }));
             }
+
+            const items = entries.map(entry => ({
+                name: entry.name,
+                isDirectory: entry.isDirectory(),
+                path: path.join(subPath, entry.name).replace(/\\/g, '/')
+            }));
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            console.log(FILES_DIR, JSON.stringify(files))
-            res.end(JSON.stringify(files));
+            res.end(JSON.stringify({
+                currentPath: subPath,
+                items: items
+            }));
         });
 
-    } else if (pathname === '/api/uploads') {
+    } else if (pathname.startsWith('/api/uploads')) {
         if (req.method === 'GET') {
-            // 업로드된 파일 목록 반환
-            fs.readdir(UPLOADS_DIR, (err, files) => {
+            const query = querystring.parse(parsedUrl.query);
+            const subPath = query.path || '';
+            const targetDir = path.join(UPLOADS_DIR, subPath);
+            
+            // 디렉토리 탐색 보안 검사
+            if (!targetDir.startsWith(UPLOADS_DIR)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ error: '잘못된 경로입니다' }));
+            }
+
+            fs.readdir(targetDir, { withFileTypes: true }, (err, entries) => {
                 if (err) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: '업로드 파일 목록 오류' }));
                 }
+
+                const items = entries.map(entry => ({
+                    name: entry.name,
+                    isDirectory: entry.isDirectory(),
+                    path: path.join(subPath, entry.name).replace(/\\/g, '/')
+                }));
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(files));
+                res.end(JSON.stringify({
+                    currentPath: subPath,
+                    items: items
+                }));
             });
         } else if (req.method === 'POST') {
             // 파일 업로드 처리

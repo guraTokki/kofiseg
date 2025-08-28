@@ -68,6 +68,37 @@
     .file-link:hover {
       text-decoration: underline;
     }
+    .directory-link {
+      text-decoration: none;
+      color: #28a745;
+      margin-right: 10px;
+      font-weight: bold;
+    }
+    .directory-link:hover {
+      text-decoration: underline;
+    }
+    .directory-link:before {
+      content: "📁 ";
+    }
+    .file-link:before {
+      content: "📄 ";
+    }
+    .breadcrumb {
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+    .breadcrumb a {
+      color: #007bff;
+      text-decoration: none;
+      margin-right: 5px;
+    }
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+    .breadcrumb span {
+      margin: 0 5px;
+      color: #666;
+    }
     .download-link {
       font-size: 12px;
       color: #666;
@@ -160,11 +191,13 @@
       </div>
       
       <h3>업로드된 파일</h3>
+      <div class="breadcrumb" id="uploadsBreadcrumb"></div>
       <ul id="uploadedFileList"></ul>
     </div>
 
     <div class="section">
       <h2>기본 파일</h2>
+      <div class="breadcrumb" id="filesBreadcrumb"></div>
       <ul id="fileList"></ul>
     </div>
   </div>
@@ -246,27 +279,43 @@
       }
 
       // 업로드 완료 후 즉시 목록 새로고침
-      loadUploadedFiles();
-      loadDefaultFiles();
+      loadUploadedFiles(currentUploadsPath);
+      loadDefaultFiles(currentFilesPath);
       fileInput.value = '';
       
       uploadButton.disabled = false;
       uploadButton.textContent = '업로드';
     }
 
+    // 현재 경로 상태
+    let currentUploadsPath = '';
+    let currentFilesPath = '';
+
     // 업로드된 파일 목록 로드
-    function loadUploadedFiles() {
-      fetch('http://localhost:3001/api/uploads')
+    function loadUploadedFiles(path = '') {
+      currentUploadsPath = path;
+      fetch(`http://localhost:3001/api/uploads?path=${encodeURIComponent(path)}`)
         .then(res => res.json())
-        .then(files => {
+        .then(data => {
           const list = document.getElementById('uploadedFileList');
+          const breadcrumb = document.getElementById('uploadsBreadcrumb');
+          
+          // 브레드크럼 업데이트
+          updateBreadcrumb(breadcrumb, path, 'uploads');
+          
           list.innerHTML = '';
-          files.forEach(file => {
+          data.items.forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `
-              <a href="view-file.html?file=${encodeURIComponent(file)}&source=uploads" class="file-link">${file}</a>
-              <a href="http://localhost:3001/api/download?file=${encodeURIComponent(file)}&source=uploads" class="download-link">[다운로드]</a>
-            `;
+            if (item.isDirectory) {
+              li.innerHTML = `
+                <a href="#" class="directory-link" onclick="loadUploadedFiles('${item.path}')">${item.name}</a>
+              `;
+            } else {
+              li.innerHTML = `
+                <a href="view-file.html?file=${encodeURIComponent(item.path)}&source=uploads" class="file-link">${item.name}</a>
+                <a href="http://localhost:3001/api/download?file=${encodeURIComponent(item.path)}&source=uploads" class="download-link">[다운로드]</a>
+              `;
+            }
             list.appendChild(li);
           });
         })
@@ -274,23 +323,59 @@
     }
 
     // 기본 파일 목록 로드
-    function loadDefaultFiles() {
-      //fetch('/api/files')
-      fetch('http://localhost:3001/api/files')
+    function loadDefaultFiles(path = '') {
+      currentFilesPath = path;
+      fetch(`http://localhost:3001/api/files?path=${encodeURIComponent(path)}`)
         .then(res => res.json())
-        .then(files => {
+        .then(data => {
           const list = document.getElementById('fileList');
+          const breadcrumb = document.getElementById('filesBreadcrumb');
+          
+          // 브레드크럼 업데이트
+          updateBreadcrumb(breadcrumb, path, 'files');
+          
           list.innerHTML = '';
-          files.forEach(file => {
+          data.items.forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `
-              <a href="view-file.html?file=${encodeURIComponent(file)}&source=files" class="file-link">${file}</a>
-              <a href="http://localhost:3001/api/download?file=${encodeURIComponent(file)}&source=files" class="download-link">[다운로드]</a>
-            `;
+            if (item.isDirectory) {
+              li.innerHTML = `
+                <a href="#" class="directory-link" onclick="loadDefaultFiles('${item.path}')">${item.name}</a>
+              `;
+            } else {
+              li.innerHTML = `
+                <a href="view-file.html?file=${encodeURIComponent(item.path)}&source=files" class="file-link">${item.name}</a>
+                <a href="http://localhost:3001/api/download?file=${encodeURIComponent(item.path)}&source=files" class="download-link">[다운로드]</a>
+              `;
+            }
             list.appendChild(li);
           });
         })
         .catch(err => console.error('기본 파일 목록 로드 실패:', err));
+    }
+
+    // 브레드크럼 업데이트 함수
+    function updateBreadcrumb(element, currentPath, source) {
+      if (!currentPath) {
+        element.innerHTML = '<span>루트</span>';
+        return;
+      }
+      
+      const pathParts = currentPath.split('/');
+      let breadcrumbHtml = `<a href="#" onclick="load${source === 'uploads' ? 'Uploaded' : 'Default'}Files('')">루트</a>`;
+      
+      let buildPath = '';
+      pathParts.forEach((part, index) => {
+        buildPath += (buildPath ? '/' : '') + part;
+        breadcrumbHtml += ` <span>/</span> `;
+        
+        if (index === pathParts.length - 1) {
+          breadcrumbHtml += `<span>${part}</span>`;
+        } else {
+          breadcrumbHtml += `<a href="#" onclick="load${source === 'uploads' ? 'Uploaded' : 'Default'}Files('${buildPath}')">${part}</a>`;
+        }
+      });
+      
+      element.innerHTML = breadcrumbHtml;
     }
 
     // 자동 새로고침 시작
@@ -300,8 +385,8 @@
       refreshInterval = setInterval(() => {
         if (autoRefreshEnabled) {
           console.log('자동 새로고침 실행 중...');
-          loadUploadedFiles();
-          loadDefaultFiles();
+          loadUploadedFiles(currentUploadsPath);
+          loadDefaultFiles(currentFilesPath);
         }
       }, 5000);
 
